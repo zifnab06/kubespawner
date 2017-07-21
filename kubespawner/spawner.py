@@ -11,13 +11,12 @@ import string
 import threading
 import sys
 from urllib.parse import urlparse, urlunparse
-from concurrent.futures import ThreadPoolExecutor
+import json
 import multiprocessing
 
 
 from tornado import gen
 from tornado.concurrent import run_on_executor
-from traitlets.config import SingletonConfigurable
 from traitlets import Type, Unicode, List, Integer, Union, Dict, Bool, Any
 from jupyterhub.spawner import Spawner
 from jupyterhub.traitlets import Command
@@ -28,19 +27,24 @@ from kubernetes import client
 import escapism
 
 from kubespawner.traitlets import Callable
-from kubespawner.utils import request_maker, k8s_url
+from kubespawner.utils import request_maker, k8s_url, SingletonExecutor
 from kubespawner.objects import make_pod, make_pvc
-from kubespawner.reflector import PodReflector
+from kubespawner.reflector import NamespacedResourceReflector
 
-
-class SingletonExecutor(SingletonConfigurable, ThreadPoolExecutor):
-    """
-    Simple wrapper to ThreadPoolExecutor that is also a singleton.
-
-    We want one ThreadPool that is used by all the spawners, rather
-    than one ThreadPool per spawner!
-    """
+class _SpawnerSingletonExecutor(SingletonExecutor):
     pass
+
+class PodReflector(NamespacedResourceReflector):
+    labels = {
+        'heritage': 'jupyterhub',
+        'component': 'singleuser-server',
+    }
+
+    list_method_name = 'list_namespaced_pod'
+
+    @property
+    def pods(self):
+        return self.resources
 
 class KubeSpawner(Spawner):
     """
@@ -50,7 +54,9 @@ class KubeSpawner(Spawner):
         super().__init__(*args, **kwargs)
         # By now, all the traitlets have been set, so we can use them to compute
         # other attributes
-        self.executor = SingletonExecutor.instance(max_workers=self.k8s_api_threadpool_workers)
+        # FIXME: Can't actually use the .instance here and in IngressReflector, traitlets will throw
+        # an error. Switch this to being just an ol' school Singleton
+        self.executor = _SpawnerSingletonExecutor.instance(max_workers=self.k8s_api_threadpool_workers)
 
         # This will start watching in __init__, so it'll start the first
         # time any spawner object is created. Not ideal but works!
