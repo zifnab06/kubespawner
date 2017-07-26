@@ -1,5 +1,6 @@
 import time
 import threading
+from tornado.ioloop import IOLoop
 
 from traitlets.config import SingletonConfigurable
 from traitlets import Dict, Unicode
@@ -78,7 +79,27 @@ class NamespacedResourceReflector(SingletonConfigurable):
         # FIXME: Protect against malicious labels?
         self.label_selector = ','.join(['{}={}'.format(k, v) for k, v in self.labels.items()])
 
+        # Key value pairs, where key is name of pod we care about
+        # and value is list of callbacks that should be fired when
+        # it gets deleted
+        self.deletion_callbacks = {}
+
         self.start()
+
+    def add_deletion_callback(self, resource_name, callback):
+        """
+        Add a callback that'll be triggered when the resource_name is deleted
+        """
+        self.deletion_callbacks.setdefault(resource_name, []).append(callback)
+
+    def _call_deleted_callbacks(self, pod):
+        """
+        Call all the registered callbacks for deletion of pod.
+
+        Clears out list afterwards
+        """
+        for cb in self.deletion_callbacks.pop(pod.metadata.name, []):
+            IOLoop.current().add_callback(cb, pod)
 
     def _list_and_update(self):
         """
@@ -86,12 +107,27 @@ class NamespacedResourceReflector(SingletonConfigurable):
 
         Overwrites all current resource info.
         """
-        initial_resources = getattr(self.api, self.list_method_name)(
+        current_resources = getattr(self.api, self.list_method_name)(
             self.namespace,
             label_selector=self.label_selector
         )
-        # This is an atomic operation on the dictionary!
-        self.resources = {p.metadata.name: p for p in initial_resources.items}
+        new_resources = {p.metadata.name: p for p in current_resources.items}
+        deleted_resources = set(self.resources).difference(new_resources)
+
+        for del_res in deleted_resources:
+            self._call_deleted_callbacks(self.resources[del_res])
+        self.resources = new_resources
+
+    def _should_fire_deletion_callback(self, resource):
+        """
+        Return true if new state of given resource requires we fire deletion callback.
+
+        This should be overriden by subclasses to tell us when we should
+        fire deletion callbacks registered before the object is deleted.
+        For example, in pods, you might just watch for Failed or Completed
+        phases, or a deletion timestamp.
+        """
+        return False
 
     def _watch_and_update(self):
         """
@@ -131,10 +167,14 @@ class NamespacedResourceReflector(SingletonConfigurable):
                     pod = ev['object']
                     if ev['type'] == 'DELETED':
                         # This is an atomic delete operation on the dictionary!
-                        self.resources.pop(pod.metadata.name, None)
+                        pod = self.resources.pop(pod.metadata.name, None)
+                        if pod:
+                            self._call_deleted_callbacks(pod)
                     else:
                         # This is an atomic operation on the dictionary!
                         self.resources[pod.metadata.name] = pod
+                        if self._should_fire_deletion_callback(pod):
+                            self._call_deleted_callbacks(pod)
             except:
                 cur_delay = cur_delay * 2
                 self.log.exception("Error when watching resources, retrying in %ss", cur_delay)

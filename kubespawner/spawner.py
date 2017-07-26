@@ -47,6 +47,13 @@ class PodReflector(NamespacedResourceReflector):
     def pods(self):
         return self.resources
 
+    def _should_fire_deletion_callback(self, pod):
+        """
+        Return true if we should consider this pod 'dead'
+        """
+        return pod.status.phase in {'Succeeded', 'Failed', 'Unknown'} or \
+            pod.metadata.deletion_timestamp is not None
+
 class KubeSpawner(Spawner):
     """
     Implement a JupyterHub spawner to spawn pods in a Kubernetes Cluster.
@@ -800,7 +807,32 @@ class KubeSpawner(Spawner):
         )
 
         pod = self.pod_reflector.pods[self.pod_name]
+        self.pod_reflector.add_deletion_callback(pod.metadata.name, self.stop_notify)
         return (pod.status.pod_ip, self.port)
+
+    def start_polling(self):
+        # We aren't polling! This is a noop
+        pass
+
+    def stop_polling(self):
+        # We aren't polling! This is a noop
+        pass
+
+    @gen.coroutine
+    def poll_and_notify(self):
+        return self.poll()
+
+    @gen.coroutine
+    def stop_notify(self, pod):
+        self.log.info("Noticed that pod %s has stopped", pod.metadata.name)
+        # clear callbacks list
+        self._callbacks, callbacks = ([], self._callbacks)
+
+        for callback in callbacks:
+            try:
+                yield gen.maybe_future(callback())
+            except Exception:
+                self.log.exception("Unhandled error in poll callback for %s", self)
 
     @gen.coroutine
     def stop(self, now=False):
