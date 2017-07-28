@@ -91,7 +91,7 @@ class KubeSpawner(Spawner):
     k8s_api_threadpool_workers = Integer(
         # Set this explicitly, since this is the default in Python 3.5+
         # but not in 3.4
-        5 * multiprocessing.cpu_count(),
+        64,
         config=True,
         help="""
         Number of threads in thread pool used to talk to the k8s API.

@@ -57,7 +57,7 @@ class KubeIngressProxy(Proxy):
         super().__init__(*args, **kwargs)
 
         # other attributes
-        self.executor = ThreadPoolExecutor(max_workers=24)
+        self.executor = ThreadPoolExecutor(max_workers=64 * 3)
 
         self.ingress_reflector = IngressReflector(parent=self, namespace=self.namespace)
 
