@@ -30,6 +30,32 @@ class IngressReflector(NamespacedResourceReflector):
     def ingresses(self):
         return self.resources
 
+class ServiceReflector(NamespacedResourceReflector):
+    labels = {
+        'heritage': 'jupyterhub',
+        'component': 'singleuser-server',
+        'hub.jupyter.org/proxy-route': 'true'
+    }
+
+    list_method_name = 'list_namespaced_service'
+
+    @property
+    def services(self):
+        return self.resources
+
+class EndpointsReflector(NamespacedResourceReflector):
+    labels = {
+        'heritage': 'jupyterhub',
+        'component': 'singleuser-server',
+        'hub.jupyter.org/proxy-route': 'true'
+    }
+
+    list_method_name = 'list_namespaced_endpoints'
+
+    @property
+    def endpoints(self):
+        return self.resources
+
 class KubeIngressProxy(Proxy):
     namespace = Unicode(
         config=True,
@@ -61,6 +87,8 @@ class KubeIngressProxy(Proxy):
         self.executor = ThreadPoolExecutor(max_workers=24)
 
         self.ingress_reflector = IngressReflector(parent=self, namespace=self.namespace)
+        self.service_reflector = ServiceReflector(parent=self, namespace=self.namespace)
+        self.endpoint_reflector = EndpointsReflector(parent=self, namespace=self.namespace)
 
         self.core_api = client.CoreV1Api()
         self.extension_api = client.ExtensionsV1beta1Api()
@@ -123,16 +151,16 @@ class KubeIngressProxy(Proxy):
                 else:
                     raise
 
-        # These objects are eventually consistent, rather than instantly consistent
-        # We can't guarantee that they will be routed appropriately immediately for all
-        # users. We instead rely on the fact that /user/<.*> urls handled by the hub after
-        # this function has returned will do exponential backoff in redirecting to ourselves.
-        # Kinda hacky, but I can't really think of another solution that'd actually work.
         yield create_if_required(
             self.core_api.create_namespaced_endpoints,
             self.core_api.delete_namespaced_endpoints,
             body=endpoint,
             kind='endpoints'
+        )
+
+        yield exponential_backoff(
+            lambda: safe_name in self.endpoint_reflector.endpoints,
+            'Could not find endpoints/%s after creating it' % safe_name
         )
 
         yield create_if_required(
@@ -141,6 +169,11 @@ class KubeIngressProxy(Proxy):
             body=service,
             pass_body_to_delete=False,
             kind='service'
+        )
+
+        yield exponential_backoff(
+            lambda: safe_name in self.service_reflector.services,
+            'Could not find service/%s after creating it' % safe_name
         )
 
         yield create_if_required(
