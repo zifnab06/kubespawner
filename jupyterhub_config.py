@@ -14,10 +14,10 @@ c.JupyterHub.cleanup_servers = False
 c.KubeSpawner.start_timeout = 60 * 5
 
 # Our simplest user image! Optimized to just... start, and be small!
-c.KubeSpawner.singleuser_image_spec = 'yuvipanda/simple-singleuser:v1'
+c.KubeSpawner.singleuser_image_spec = 'jupyterhub/k8s-singleuser-sample:v0.4'
 
 # The spawned containers need to be able to talk to the hub through the proxy!
-c.KubeSpawner.hub_connect_ip = os.environ['HUB_CONNECT_IP']
+c.KubeSpawner.hub_connect_ip = os.environ.get('HUB_CONNECT_IP', '127.0.0.1')
 
 # Do not use any authentication at all - any username / password will work.
 c.JupyterHub.authenticator_class = 'dummyauthenticator.DummyAuthenticator'

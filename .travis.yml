@@ -11,7 +11,10 @@ python:
 # install dependencies
 install:
   - ./travis/install-minikube.bash
+  - ./kubectl version
   - pip install --no-cache-dir -e .
+  - pip install --no-cache-dir jupyterhub-dummyauthenticator
+  - jupyterhub
 
 # command to run tests
 script:
