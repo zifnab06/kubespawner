@@ -1,13 +1,16 @@
 language: python
-sudo: false
+sudo: true
+services:
+ - docker
+
 python:
-  - nightly
   - 3.6
   - 3.5
   - 3.4
 
 # install dependencies
 install:
+  - ./travis/install-minikube.bash
   - pip install --no-cache-dir -e .
 
 # command to run tests
