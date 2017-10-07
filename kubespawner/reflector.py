@@ -171,9 +171,9 @@ class NamespacedResourceReflector(SingletonConfigurable):
                     resource = ev['object']
                     if ev['type'] == 'DELETED':
                         # This is an atomic delete operation on the dictionary!
-                        resource = self.resources.pop(pod.metadata.name, None)
+                        resource = self.resources.pop(resource.metadata.name, None)
                         if resource:
-                            self._call_deleted_callbacks(pod)
+                            self._call_deleted_callbacks(resource)
                     else:
                         # This is an atomic operation on the dictionary!
                         self.resources[resource.metadata.name] = resource
