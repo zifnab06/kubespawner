@@ -833,16 +833,15 @@ class KubeSpawner(Spawner):
         self.pod_reflector.add_deletion_callback(pod.metadata.name, self.stop_notify)
         return (pod.status.pod_ip, self.port)
 
-    def start_polling(self):
-        # We aren't polling! This is a noop
-        pass
-
-    def stop_polling(self):
-        # We aren't polling! This is a noop
-        pass
+    # We don't want JupyterHub to call us at all, since we automatically trigger events
+    # if needed when things are deleted
+    poll_interval = 0
 
     @gen.coroutine
     def poll_and_notify(self):
+        """
+        No notification is needed, we shall just poll!
+        """
         return (yield self.poll())
 
     @gen.coroutine
