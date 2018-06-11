@@ -304,7 +304,9 @@ def make_ingress(
         name,
         routespec,
         target,
-        data
+        data,
+        annotations={},
+        labels={}
 ):
     """
     Returns an ingress, service, endpoint object that'll work for this service
@@ -314,12 +316,14 @@ def make_ingress(
         annotations={
             'hub.jupyter.org/proxy-data': json.dumps(data),
             'hub.jupyter.org/proxy-routespec': routespec,
-            'hub.jupyter.org/proxy-target': target
+            'hub.jupyter.org/proxy-target': target,
+            **annotations
         },
         labels={
             'heritage': 'jupyterhub',
             'component': 'singleuser-server',
-            'hub.jupyter.org/proxy-route': 'true'
+            'hub.jupyter.org/proxy-route': 'true',
+            **labels
         }
     )
 

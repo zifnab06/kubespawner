@@ -12,7 +12,7 @@ from kubespawner.objects import make_ingress
 from kubespawner.utils import generate_hashed_slug
 from kubespawner.reflector import NamespacedResourceReflector
 from .clients import shared_client
-from traitlets import Unicode
+from traitlets import Unicode, Dict
 from tornado import gen
 from tornado.concurrent import run_on_executor
 
@@ -67,7 +67,19 @@ class KubeIngressProxy(Proxy):
         defaults to the current namespace. If not, defaults to 'default'
         """
     )
+    annotations = Dict(
+        config=True,
+        help="""
+        Additional annotations for proxy objects
+        """
+    )
 
+    labels = Dict(
+        config=True,
+        help="""
+        Additional labels for proxy objects
+        """
+    )
     def _namespace_default(self):
         """
         Set namespace default to current namespace if running in a k8s cluster
@@ -118,7 +130,9 @@ class KubeIngressProxy(Proxy):
             safe_name,
             routespec,
             target,
-            data
+            data,
+            self.annotations,
+            self.labels
         )
 
         @gen.coroutine
